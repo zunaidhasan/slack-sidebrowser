@@ -12,6 +12,7 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::S
 $repo    = 'zunaidhasan/slack-sidebrowser'
 $branch  = 'main'
 $releaseZipUrl = "https://github.com/$repo/releases/latest/download/slack-browser-install.zip"
+$releaseSumsUrl = "https://github.com/$repo/releases/latest/download/SHA256SUMS.txt"
 $zipUrl  = "https://raw.githubusercontent.com/$repo/$branch/slack-browser-install.zip"
 $zipUrlcb = $zipUrl + '?cb=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 $mod     = Join-Path $env:USERPROFILE '.slack-browser'
@@ -39,11 +40,33 @@ try {
     [IO.File]::WriteAllBytes($zip, [Convert]::FromBase64String(($blob.content -replace '\s', '')))
   }
   # Prefer versioned release assets; use the repository copy until the first release exists.
+  $releaseDownloaded = $false
   try {
     Invoke-WebRequest -Uri $releaseZipUrl -OutFile $zip -UseBasicParsing -ProxyUseDefaultCredentials
     if ((Get-Item $zip).Length -lt 1KB) { throw 'release package is empty' }
+    $releaseDownloaded = $true
   } catch {
     Say 'release package unavailable - repository package retry...'
+  }
+  if ($releaseDownloaded) {
+    try {
+      $sums = Join-Path $work 'SHA256SUMS.txt'
+      Invoke-WebRequest -Uri $releaseSumsUrl -OutFile $sums -UseBasicParsing -ProxyUseDefaultCredentials
+      $expectedHash = $null
+      foreach ($line in (Get-Content $sums)) {
+        if ($line -match '^([0-9a-fA-F]{64})\s+\*?slack-browser-install\.zip$') {
+          if ($expectedHash) { throw 'checksum file contains duplicate package entries' }
+          $expectedHash = $Matches[1]
+        }
+      }
+      if (-not $expectedHash) { throw 'checksum file has no slack-browser-install.zip entry' }
+      $actualHash = (Get-FileHash $zip -Algorithm SHA256).Hash
+      if ($actualHash -ne $expectedHash) { throw 'package SHA-256 does not match the release checksum' }
+      Say 'release package checksum verified'
+    } catch {
+      throw "Release package checksum verification failed: $($_.Exception.Message)"
+    }
+  } else {
     try { ApiZipBytes } catch {
       Say 'blob API failed - codeload retry...'
       try {
