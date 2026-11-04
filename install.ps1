@@ -1,7 +1,7 @@
 <#
   Slack Sidebrowser - install / update
 
-  1) downloads slack-browser-install.zip from this repo
+  1) downloads slack-browser-install.zip from the latest GitHub Release
   2) refreshes the payload in %USERPROFILE%\.slack-browser; your PIN, logs and
      backups are left alone, so the same command works as the updater
   3) runs apply-store-patch.ps1 elevated -> patches Store Slack and restarts it
@@ -10,11 +10,8 @@ $ErrorActionPreference = 'Stop'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
 $repo    = 'zunaidhasan/slack-sidebrowser'
-$branch  = 'main'
-$releaseZipUrl = "https://github.com/$repo/releases/latest/download/slack-browser-install.zip"
-$releaseSumsUrl = "https://github.com/$repo/releases/latest/download/SHA256SUMS.txt"
-$zipUrl  = "https://raw.githubusercontent.com/$repo/$branch/slack-browser-install.zip"
-$zipUrlcb = $zipUrl + '?cb=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+$zipUrl  = "https://github.com/$repo/releases/latest/download/slack-browser-install.zip"
+$sumsUrl = "https://github.com/$repo/releases/latest/download/SHA256SUMS.txt"
 $mod     = Join-Path $env:USERPROFILE '.slack-browser'
 $work    = Join-Path $env:TEMP ('sb-install-' + [Guid]::NewGuid().ToString('N'))
 $zip     = Join-Path $work 'slack-browser-install.zip'
@@ -32,59 +29,29 @@ try {
   }
 
   New-Item -ItemType Directory -Force -Path $work | Out-Null
-  Say 'downloading package...'
-  function ApiZipBytes {
-    # contents API cannot serve >1MB blobs raw; resolve sha then fetch the git blob (base64)
-    $meta = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/contents/slack-browser-install.zip?ref=$branch" -Headers @{ 'User-Agent' = 'slack-sidebrowser' } -ProxyUseDefaultCredentials
-    $blob = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/git/blobs/$($meta.sha)" -Headers @{ 'User-Agent' = 'slack-sidebrowser' } -ProxyUseDefaultCredentials
-    [IO.File]::WriteAllBytes($zip, [Convert]::FromBase64String(($blob.content -replace '\s', '')))
-  }
-  # Prefer versioned release assets; use the repository copy until the first release exists.
-  $releaseDownloaded = $false
+  Say 'downloading package from GitHub Releases...'
   try {
-    Invoke-WebRequest -Uri $releaseZipUrl -OutFile $zip -UseBasicParsing -ProxyUseDefaultCredentials
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing -ProxyUseDefaultCredentials
     if ((Get-Item $zip).Length -lt 1KB) { throw 'release package is empty' }
-    $releaseDownloaded = $true
   } catch {
-    Say 'release package unavailable - repository package retry...'
+    throw "Release download failed. Check your network or proxy configuration. Details: $($_.Exception.Message)"
   }
-  if ($releaseDownloaded) {
-    try {
-      $sums = Join-Path $work 'SHA256SUMS.txt'
-      Invoke-WebRequest -Uri $releaseSumsUrl -OutFile $sums -UseBasicParsing -ProxyUseDefaultCredentials
-      $expectedHash = $null
-      foreach ($line in (Get-Content $sums)) {
-        if ($line -match '^([0-9a-fA-F]{64})\s+\*?slack-browser-install\.zip$') {
-          if ($expectedHash) { throw 'checksum file contains duplicate package entries' }
-          $expectedHash = $Matches[1]
-        }
-      }
-      if (-not $expectedHash) { throw 'checksum file has no slack-browser-install.zip entry' }
-      $actualHash = (Get-FileHash $zip -Algorithm SHA256).Hash
-      if ($actualHash -ne $expectedHash) { throw 'package SHA-256 does not match the release checksum' }
-      Say 'release package checksum verified'
-    } catch {
-      throw "Release package checksum verification failed: $($_.Exception.Message)"
-    }
-  } else {
-    try { ApiZipBytes } catch {
-      Say 'blob API failed - codeload retry...'
-      try {
-        Invoke-WebRequest -Uri "https://codeload.github.com/$repo/zip/refs/heads/$branch" -OutFile $zip -UseBasicParsing -ProxyUseDefaultCredentials
-        if ((Get-Item $zip).Length -lt 1KB) { throw 'codeload returned an empty response' }
-      } catch {
-        Say 'codeload failed - raw retry...'
-        try {
-          Invoke-WebRequest -Uri "$zipUrlcb" -OutFile $zip -UseBasicParsing -ProxyUseDefaultCredentials
-        } catch {
-          try {
-            Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing -ProxyUseDefaultCredentials
-          } catch {
-            throw "Download failed. This is usually caused by a strict network firewall or proxy configuration. Details: $($_.Exception.Message)"
-          }
-        }
+  try {
+    $sums = Join-Path $work 'SHA256SUMS.txt'
+    Invoke-WebRequest -Uri $sumsUrl -OutFile $sums -UseBasicParsing -ProxyUseDefaultCredentials
+    $expectedHash = $null
+    foreach ($line in (Get-Content $sums)) {
+      if ($line -match '^([0-9a-fA-F]{64})\s+\*?slack-browser-install\.zip$') {
+        if ($expectedHash) { throw 'checksum file contains duplicate package entries' }
+        $expectedHash = $Matches[1]
       }
     }
+    if (-not $expectedHash) { throw 'checksum file has no slack-browser-install.zip entry' }
+    $actualHash = (Get-FileHash $zip -Algorithm SHA256).Hash
+    if ($actualHash -ne $expectedHash) { throw 'package SHA-256 does not match the release checksum' }
+    Say 'release package checksum verified'
+  } catch {
+    throw "Release package checksum verification failed: $($_.Exception.Message)"
   }
   Say ('package ok: ' + [math]::Round((Get-Item $zip).Length / 1MB, 1) + ' MB')
 

@@ -89,11 +89,13 @@ uses the current Windows credentials for the configured proxy.
 The patcher also detects classic Win32 Slack under `%LOCALAPPDATA%\slack` and
 has portable/classic fallbacks when Store package files cannot be patched.
 
-Pushing a `v*` tag runs the release workflow, which checks the package and
-publishes the installer, package, and `SHA256SUMS.txt`. It publishes the
-checked-in prebuilt package; this repository does not contain the source build
-needed to regenerate `work/app.new.asar`. The installer prefers the latest
-release asset and falls back to the repository package until a release exists.
+Pushing a `v*` tag runs the release workflow, which downloads the package from
+the latest release, checks its contents, and publishes the installer, package,
+and `SHA256SUMS.txt`. This repository does not contain the source build needed
+to regenerate `work/app.new.asar`; the prebuilt package is distributed through
+GitHub Releases rather than committed to the main branch. The installer
+downloads the package and checksum from the latest release and verifies the
+package before installing it.
 
 After downloading the installer, package, and checksum file from the same
 GitHub Release, verify both files before running the installer:

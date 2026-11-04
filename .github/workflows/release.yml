@@ -14,6 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download package from latest release
+        run: curl --fail --location --retry 3 --output slack-browser-install.zip "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/slack-browser-install.zip"
+
       - name: Validate installer package
         run: |
           python3 - <<'PY'
