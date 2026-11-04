@@ -1,0 +1,52 @@
+name: Publish release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate installer package
+        run: |
+          python3 - <<'PY'
+          from zipfile import ZipFile
+
+          required = {
+              "apply-store-patch.ps1",
+              "apply-msix-patch.ps1",
+              "sb_main.js",
+              "sb_update.cjs",
+              "sb_store.cjs",
+              "sb_blocker.cjs",
+              "sb_search.cjs",
+              "sb_easylist.txt",
+              "sb_preload.cjs",
+              "sb_content_preload.cjs",
+              "sb_toolbar.html",
+              "sb_toolbar_preload.cjs",
+              "sb_unlock.html",
+              "sb_settings.html",
+              "sb_phrase.html",
+              "work/app.new.asar",
+          }
+          with ZipFile("slack-browser-install.zip") as package:
+              missing = required.difference(package.namelist())
+          if missing:
+              raise SystemExit(f"Package is incomplete: {', '.join(sorted(missing))}")
+          PY
+
+      - name: Generate SHA-256 checksums
+        run: sha256sum install.ps1 slack-browser-install.zip > SHA256SUMS.txt
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" install.ps1 slack-browser-install.zip SHA256SUMS.txt --generate-notes

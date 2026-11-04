@@ -68,20 +68,55 @@ Fast, fuzzy-search overlay that works across:
 
 ---
 
-## Install / Update (one line)
+## Install / Update
 
-Open **PowerShell** and run:
+Download the installer to a local file so you can inspect it before running:
 
 ```powershell
-irm https://raw.githubusercontent.com/zunaidhasan/slack-sidebrowser/main/install.ps1 | iex
+$installer = Join-Path $PWD 'install.ps1'
+Invoke-WebRequest `
+  -Uri 'https://raw.githubusercontent.com/zunaidhasan/slack-sidebrowser/main/install.ps1' `
+  -OutFile $installer `
+  -ProxyUseDefaultCredentials
+Get-FileHash $installer -Algorithm SHA256
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer
+```
+
+The installer checks for a running Slack process before downloading. It prompts
+for UAC elevation only when patching Slack; do not run the whole PowerShell
+session as Administrator. On a corporate network, `-ProxyUseDefaultCredentials`
+uses the current Windows credentials for the configured proxy.
+The patcher also detects classic Win32 Slack under `%LOCALAPPDATA%\slack` and
+has portable/classic fallbacks when Store package files cannot be patched.
+
+Pushing a `v*` tag runs the release workflow, which checks the package and
+publishes the installer, package, and `SHA256SUMS.txt`. It publishes the
+checked-in prebuilt package; this repository does not contain the source build
+needed to regenerate `work/app.new.asar`. The installer prefers the latest
+release asset and falls back to the repository package until a release exists.
+
+After downloading the installer, package, and checksum file from the same
+GitHub Release, verify both files before running the installer:
+
+```powershell
+$expected = @{}
+Get-Content .\SHA256SUMS.txt | ForEach-Object {
+  if ($_ -notmatch '^([0-9a-f]{64})\s+\*?(.+)$') { throw "Invalid checksum line: $_" }
+  $expected[$Matches[2]] = $Matches[1]
+}
+foreach ($file in @('install.ps1', 'slack-browser-install.zip')) {
+  $actual = (Get-FileHash ".\$file" -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($actual -ne $expected[$file]) { throw "Checksum mismatch: $file" }
+}
+Write-Host 'Checksums verified.'
 ```
 
 The installer will:
-- Download the latest package from this repo
+- Download the latest package
 - Refresh the payload in `%USERPROFILE%\.slack-browser` (your PIN, bookmarks, profiles and logs are never touched)
 - Patch your default Store Slack and restart it (UAC prompt once)
 
-The same command works as the **updater** — run it again after any Slack Store update.
+Run the same local installer again as the **updater** after any Slack Store update.
 
 ---
 
