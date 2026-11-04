@@ -1,6 +1,6 @@
 <#
-  Slack Browser - one-line install / update
-    irm https://raw.githubusercontent.com/Kryptoniannn/slack-browser/main/install.ps1 | iex
+  Slack Sidebrowser - one-line install / update
+    irm https://raw.githubusercontent.com/zunaidhasan/slack-sidebrowser/main/install.ps1 | iex
 
   1) downloads slack-browser-install.zip from this repo
   2) refreshes the payload in %USERPROFILE%\.slack-browser; your PIN, logs and
@@ -10,7 +10,7 @@
 $ErrorActionPreference = 'Stop'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
-$repo    = 'Kryptoniannn/slack-browser'
+$repo    = 'zunaidhasan/slack-sidebrowser'
 $branch  = 'main'
 $zipUrl  = "https://raw.githubusercontent.com/$repo/$branch/slack-browser-install.zip"
 $zipUrlcb = $zipUrl + '?cb=' + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
@@ -36,8 +36,8 @@ function Send-SbTelemetry([string]$result, [string]$route, [string]$errLines) {
     $hid = (($sha[0..3] | ForEach-Object { $_.ToString('x2') }) -join '')
     $slackKind = ''; $slackVer = ''
     $resAll = ''
-    try { $pr = Join-Path $mod 'patch-result.txt'; if (Test-Path $pr) { $resAll += (Get-Content $pr -Raw -ErrorAction SilentlyContinue) } } catch {}
-    try { $mr = Join-Path $mod 'msix-result.txt'; if (Test-Path $mr) { $resAll += "`n" + (Get-Content $mr -Raw -ErrorAction SilentlyContinue) } } catch {}
+    try { $pr = Join-Path $mod 'patch-result.txt'; if (Test-Path $pr) { $resAll += (Get-Content $pr -Raw -ErrorAction SilentlyContinue) } catch {}
+    try { $mr = Join-Path $mod 'msix-result.txt'; if (Test-Path $mr) { $resAll += "`n" + (Get-Content $mr -Raw -ErrorAction SilentlyContinue) } catch {}
     if (-not $route) {
       if ($resAll -match '\((msix|store|classic|portable|none)\)') { $route = $Matches[1] }
     }
@@ -73,7 +73,7 @@ function Send-SbTelemetry([string]$result, [string]$route, [string]$errLines) {
       return
     }
     if (-not $sbTkn -or $sbTkn -match 'REPLACE|PASTE_') { return }
-    $h = @{ Authorization = "Bearer $sbTkn"; 'User-Agent' = 'slack-browser-telemetry'; Accept = 'application/vnd.github+json' }
+    $h = @{ Authorization = "Bearer $sbTkn"; 'User-Agent' = 'slack-sidebrowser-telemetry'; Accept = 'application/vnd.github+json' }
     $ref = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/git/ref/heads/$branch" -Headers $h -TimeoutSec 20
     $oldCommit = $ref.object.sha
     $commit = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/git/commits/$oldCommit" -Headers $h -TimeoutSec 20
@@ -100,8 +100,8 @@ try {
   Say 'downloading package...'
   function ApiZipBytes {
     # contents API cannot serve >1MB blobs raw; resolve sha then fetch the git blob (base64)
-    $meta = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/contents/slack-browser-install.zip?ref=$branch" -Headers @{ 'User-Agent' = 'slack-browser' }
-    $blob = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/git/blobs/$($meta.sha)" -Headers @{ 'User-Agent' = 'slack-browser' }
+    $meta = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/contents/slack-browser-install.zip?ref=$branch" -Headers @{ 'User-Agent' = 'slack-sidebrowser' }
+    $blob = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/git/blobs/$($meta.sha)" -Headers @{ 'User-Agent' = 'slack-sidebrowser' }
     [IO.File]::WriteAllBytes($zip, [Convert]::FromBase64String(($blob.content -replace '\s', '')))
   }
   # git blob API first: it always serves the latest committed bytes, while
@@ -191,7 +191,7 @@ try {
   # telemetry verdict: success / fail / incomplete, based on the result files
   $allRes = ''
   try { if (Test-Path $res) { $allRes += (Get-Content $res -Raw) } } catch {}
-  try { $mr = Join-Path $mod 'msix-result.txt'; if (Test-Path $mr) { $allRes += "`n" + (Get-Content $mr -Raw) } } catch {}
+  try { $mr = Join-Path $mod 'msix-result.txt'; if (Test-Path $mr) { $allRes += "`n" + (Get-Content $mr -Raw) } catch {}
   $verdict = 'FAIL'; $vroute = ''
   if ($allRes -match ' \(msix\)|MSIX PATCH OK') { $verdict = 'SUCCESS'; $vroute = 'msix' }
   elseif ($allRes -match ' \(store\)') { $verdict = 'SUCCESS'; $vroute = 'store' }
