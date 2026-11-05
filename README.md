@@ -22,7 +22,8 @@ Constantly alt-tabbing kills focus. Slack Sidebrowser keeps everything in one pl
 - **PIN protection** + auto-lock (configurable: off / 10s / 30s / 1m / 5m / 1h)
 - **Transparency slider** — see your Slack conversation behind the browser
 - **Self-updating** — check for updates from the ⋮ menu
-- **Survives Slack updates** — one-line re-patch after any Store update
+- **Health check and re-patch** — check the last patch result and re-apply it from Settings
+- **Re-patch after Slack updates** — rerun the installer; Settings repair is available while Sidebrowser is loaded
 
 ### Profiles / Workspaces
 Three built-in isolated profiles + unlimited custom ones:
@@ -57,14 +58,17 @@ Fast, fuzzy-search overlay that works across:
 3. **Bookmarks** (current profile)
 4. **Recent history** (last ~50 URLs of current profile)
 
-### Coming Next
-- **Smart side-panel modes**
-  - Split view (adjustable ratio between Slack + browser)
-  - Picture-in-Picture for video
-  - Focus mode (dims everything except the current thread)
-- **Context-aware link detection** — “Open here” buttons appear on links in the conversation
-- **Download manager + full history** (per profile)
-- **Built-in ad & tracker blocker** (EasyList + privacy lists)
+### Browser features
+- **Per-profile history and downloads** — the most recent 50 URLs and 80 download records are retained
+- **Download progress** in the toolbar, with files saved in the selected profile's download folder
+- **EasyList-style ad/tracker blocking** — toggle the built-in network filter from Settings
+- **Split view** with a draggable divider and saved Slack/browser ratio
+- **Focus mode** to dim the Slack conversation while keeping the browser visible
+- **Picture-in-Picture** for supported video elements
+- **Optional “Open here” link actions** in your own DM (off by default)
+- **Theme matching** for Slack's current appearance
+- **First-run onboarding** for profile selection and shortcuts
+- **Settings recovery** — health check, repair, and Slack re-patch actions
 
 ---
 
@@ -76,26 +80,32 @@ Download the installer to a local file so you can inspect it before running:
 $installer = Join-Path $PWD 'install.ps1'
 Invoke-WebRequest `
   -Uri 'https://raw.githubusercontent.com/zunaidhasan/slack-sidebrowser/main/install.ps1' `
-  -OutFile $installer `
-  -ProxyUseDefaultCredentials
+  -OutFile $installer
 Get-FileHash $installer -Algorithm SHA256
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer
 ```
 
 The installer checks for a running Slack process before downloading. It prompts
 for UAC elevation only when patching Slack; do not run the whole PowerShell
-session as Administrator. On a corporate network, `-ProxyUseDefaultCredentials`
-uses the current Windows credentials for the configured proxy.
+session as Administrator. Downloads use PowerShell's configured default proxy.
 The patcher also detects classic Win32 Slack under `%LOCALAPPDATA%\slack` and
 has portable/classic fallbacks when Store package files cannot be patched.
 
-Pushing a `v*` tag runs the release workflow, which downloads the package from
-the latest release, checks its contents, and publishes the installer, package,
-and `SHA256SUMS.txt`. This repository does not contain the source build needed
-to regenerate `work/app.new.asar`; the prebuilt package is distributed through
-GitHub Releases rather than committed to the main branch. The installer
-downloads the package and checksum from the latest release and verifies the
-package before installing it.
+Pushing a `v*` tag runs the Windows release workflow, which overlays the
+tracked source onto the previous release package, validates its contents,
+Authenticode-signs the installer and bundled PowerShell scripts, and publishes
+the signed installer, package, checksums, and changelog. Configure the GitHub
+repository secrets `SIGNING_CERTIFICATE_PFX_BASE64` (base64-encoded
+Code-Signing PFX) and `SIGNING_CERTIFICATE_PASSWORD` before tagging a release;
+the workflow fails closed if they are missing or signing is invalid. The release
+notes come from the `## Unreleased` section of [CHANGELOG.md](./CHANGELOG.md).
+
+This repository does not contain the source build needed to regenerate
+`work/app.new.asar`; the prebuilt package is distributed through GitHub Releases
+rather than committed to the main branch. The first release workflow run must
+therefore be bootstrapped with a known-good prior release package containing
+`work/app.new.asar`. The installer verifies the release package checksum before
+installing it.
 
 After downloading the installer, package, and checksum file from the same
 GitHub Release, verify both files before running the installer:
@@ -116,9 +126,14 @@ Write-Host 'Checksums verified.'
 The installer will:
 - Download the latest package
 - Refresh the payload in `%USERPROFILE%\.slack-browser` (your PIN, bookmarks, profiles and logs are never touched)
-- Patch your default Store Slack and restart it (UAC prompt once)
+- Run the elevated patcher, check its exit code and require an explicit `PATCH OK` result before reporting success
+- Restart Slack through the patcher (UAC prompt once)
 
 Run the same local installer again as the **updater** after any Slack Store update.
+If Sidebrowser is still available after a Slack change, Settings also provides a
+health check and a re-patch action. Re-patching closes Slack and requires UAC
+approval; if a Store update removed Sidebrowser before it could show Settings,
+run the local installer again.
 
 ---
 
@@ -140,30 +155,48 @@ Run the same local installer again as the **updater** after any Slack Store upda
 
 ## Uninstall
 
-1. Delete the desktop / taskbar shortcut
-2. Delete the folder `%USERPROFILE%\.slack-browser`
-3. (Optional) Restore original files from `store\Slack.exe.bak` and `app.asar.bak` if needed
+Close Slack, then run the bundled restoration script from PowerShell:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.slack-browser\uninstall.ps1"
+```
+
+Approve the UAC prompt to restore the original Slack files/package. The script
+leaves Sidebrowser settings, profiles, and logs in `%USERPROFILE%\.slack-browser`;
+remove that folder separately only after confirming the original Slack starts.
 
 ---
 
 ## Notes
 
 - Logs: `%USERPROFILE%\.slack-browser\sb.log`
-- User data: `sb_pin.json`, `sb_ui.json`, `sb_bookmarks_<id>.json`
+- User data: `sb_pin.json`, `sb_ui.json`, and per-profile bookmarks, history,
+  downloads, and session folders
 - After a Slack Store update, simply re-run the one-line installer
-- Built for recent Slack Store builds; the patcher rolls back automatically if Slack fails to start
+- The patcher supports Store and classic/portable fallbacks, but clean-machine,
+  MSIX, and Windows 24H2 compatibility still need release qualification
+- The release workflow overlays sources on a prebuilt ASAR; this repository
+  cannot independently rebuild that binary payload
 
 ---
 
-## Roadmap
+## Roadmap status
 
-- [x] Multi-profile isolation (Work / Personal / Research + custom)
-- [x] Command palette (`Ctrl+K`)
-- [ ] Split view + Focus mode + Picture-in-Picture
-- [ ] Context-aware “Open here” on links
-- [ ] Per-profile history & download manager
-- [ ] Built-in ad/tracker blocking
-- [ ] Theme matching (auto dark/light with Slack)
+The current source implements profile isolation, command palette, browser
+history/download persistence, blocking, split/focus/PiP modes, optional link
+actions, theme matching, onboarding, and Settings health/repair. Remaining
+release work includes independently rebuilding `app.new.asar`, verifying clean
+machine and Windows 24H2/MSIX installs and restores, producing product
+screenshots/demo, exercising a clean-machine install, and optionally signing
+the release. These environment-dependent checks are not claimed as complete.
+
+Run the local module tests with `npm test` (Node.js 18+). The Electron UI and
+Slack patch/restore paths still require a Windows Slack installation for
+end-to-end verification.
+
+## License
+
+Licensed under Apache-2.0; see [LICENSE](./LICENSE).
 
 ---
 

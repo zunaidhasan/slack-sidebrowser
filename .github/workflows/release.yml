@@ -10,16 +10,60 @@ permissions:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download package from latest release
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Download last known-good app payload
+        shell: bash
         run: curl --fail --location --retry 3 --output slack-browser-install.zip "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/slack-browser-install.zip"
 
-      - name: Validate installer package
+      - name: Overlay current source into app payload
+        shell: bash
         run: |
-          python3 - <<'PY'
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          from shutil import copy2
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          source_files = [
+              "apply-store-patch.ps1", "apply-msix-patch.ps1", "sb_main.js",
+              "sb_update.cjs", "sb_store.cjs", "sb_lock.cjs", "sb_tabs.cjs", "sb_blocker.cjs", "sb_search.cjs",
+              "sb_easylist.txt", "sb_preload.cjs", "sb_content_preload.cjs",
+              "sb_toolbar.html", "sb_toolbar_preload.cjs", "sb_unlock.html",
+              "sb_settings.html", "sb_phrase.html", "sb_onboarding.html",
+              "uninstall.ps1",
+          ]
+          package_dir = Path("release-package")
+          package_dir.mkdir()
+          with ZipFile("slack-browser-install.zip") as package:
+              for member in package.namelist():
+                  path = PurePosixPath(member)
+                  if path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"Unsafe package path: {member}")
+              package.extractall(package_dir)
+          for name in source_files:
+              source = Path(name)
+              if not source.is_file():
+                  raise SystemExit(f"Missing tracked payload source: {name}")
+              copy2(source, package_dir / name)
+          archive = Path("slack-browser-install.new.zip")
+          with ZipFile(archive, "w", ZIP_DEFLATED) as package:
+              for source in sorted(package_dir.rglob("*")):
+                  if source.is_file():
+                      package.write(source, source.relative_to(package_dir).as_posix())
+          archive.replace("slack-browser-install.zip")
+          PY
+
+      - name: Validate installer package
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
           from zipfile import ZipFile
 
           required = {
@@ -28,6 +72,8 @@ jobs:
               "sb_main.js",
               "sb_update.cjs",
               "sb_store.cjs",
+              "sb_lock.cjs",
+              "sb_tabs.cjs",
               "sb_blocker.cjs",
               "sb_search.cjs",
               "sb_easylist.txt",
@@ -38,18 +84,86 @@ jobs:
               "sb_unlock.html",
               "sb_settings.html",
               "sb_phrase.html",
+              "sb_onboarding.html",
+              "uninstall.ps1",
               "work/app.new.asar",
           }
           with ZipFile("slack-browser-install.zip") as package:
-              missing = required.difference(package.namelist())
-          if missing:
-              raise SystemExit(f"Package is incomplete: {', '.join(sorted(missing))}")
+              names = set(package.namelist())
+              missing = required.difference(names)
+              if missing:
+                  raise SystemExit(f"Package is incomplete: {', '.join(sorted(missing))}")
+              for name in required - {"work/app.new.asar"}:
+                  if Path(name).read_bytes() != package.read(name):
+                      raise SystemExit(f"Release package source is stale: {name}")
+          PY
+
+      - name: Sign installer and PowerShell payload
+        env:
+          SIGNING_CERTIFICATE_PFX_BASE64: ${{ secrets.SIGNING_CERTIFICATE_PFX_BASE64 }}
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+        shell: pwsh
+        run: |
+          if (-not $env:SIGNING_CERTIFICATE_PFX_BASE64 -or -not $env:SIGNING_CERTIFICATE_PASSWORD) {
+            throw 'Configure SIGNING_CERTIFICATE_PFX_BASE64 and SIGNING_CERTIFICATE_PASSWORD repository secrets before publishing a release.'
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'slack-sidebrowser-signing.pfx'
+          $pfxBytes = [Convert]::FromBase64String($env:SIGNING_CERTIFICATE_PFX_BASE64)
+          [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+          $password = ConvertTo-SecureString $env:SIGNING_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certs = @(Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password)
+          Remove-Item -LiteralPath $pfxPath -Force
+          $cert = $certs | Where-Object {
+            $_.HasPrivateKey -and ($_.EnhancedKeyUsageList | Where-Object { $_.ObjectId.Value -eq '1.3.6.1.5.5.7.3.3' })
+          } | Select-Object -First 1
+          if (-not $cert) { throw 'The signing PFX must contain a private key and the Code Signing EKU.' }
+
+          $scripts = @((Resolve-Path .\install.ps1).Path) + @(
+            Get-ChildItem .\release-package -Filter *.ps1 -File -Recurse | ForEach-Object { $_.FullName }
+          )
+          foreach ($script in $scripts) {
+            $signature = Set-AuthenticodeSignature -FilePath $script -Certificate $cert -HashAlgorithm SHA256 -TimestampServer 'https://timestamp.digicert.com'
+            if ($signature.Status -ne 'Valid') { throw "Authenticode signing failed for $script`: $($signature.StatusMessage)" }
+          }
+
+          python -c "from pathlib import Path; from zipfile import ZipFile, ZIP_DEFLATED; root=Path('release-package'); z=ZipFile('slack-browser-install.zip','w',ZIP_DEFLATED); [z.write(p,p.relative_to(root).as_posix()) for p in sorted(root.rglob('*')) if p.is_file()]; z.close()"
+          $signature = Get-AuthenticodeSignature .\install.ps1
+          if ($signature.Status -ne 'Valid') { throw 'Signed installer signature verification failed.' }
+          $certs | Where-Object { $_.Thumbprint -eq $cert.Thumbprint } | ForEach-Object {
+            Remove-Item -LiteralPath ("Cert:\CurrentUser\My\" + $_.Thumbprint) -Force
+          }
+
+      - name: Extract release notes from changelog
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          match = re.search(r"^## Unreleased\s*$([\s\S]*?)(?=^## |\Z)", changelog, re.MULTILINE)
+          notes = match.group(1).strip() if match else ""
+          if not notes:
+              raise SystemExit("CHANGELOG.md must have release notes under ## Unreleased")
+          Path("RELEASE_NOTES.md").write_text(notes + "\n", encoding="utf-8")
           PY
 
       - name: Generate SHA-256 checksums
-        run: sha256sum install.ps1 slack-browser-install.zip > SHA256SUMS.txt
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+
+          with Path("SHA256SUMS.txt").open("w", encoding="ascii", newline="\n") as checksums:
+              for name in ("install.ps1", "slack-browser-install.zip"):
+                  digest = sha256(Path(name).read_bytes()).hexdigest()
+                  checksums.write(f"{digest} *{name}\n")
+          PY
 
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" install.ps1 slack-browser-install.zip SHA256SUMS.txt --generate-notes
+        shell: bash
+        run: gh release create "$GITHUB_REF_NAME" install.ps1 slack-browser-install.zip SHA256SUMS.txt CHANGELOG.md --title "$GITHUB_REF_NAME" --notes-file RELEASE_NOTES.md

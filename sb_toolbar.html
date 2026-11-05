@@ -1,0 +1,400 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#141a21; --inp:#1e2630; --bd:#2c3a47; --fg:#dbe4ee; --acc:#36c5f0; --sb-bg:var(--bg); --sb-fg:var(--fg); }
+  html,body { margin:0; height:100%; overflow:hidden; background:transparent; color:var(--sb-fg);
+    font-family:"Segoe UI",Arial,sans-serif; user-select:none; }
+  #top { display:flex; gap:5px; align-items:center; height:46px; padding:0 8px 0 78px; box-sizing:border-box; position:relative; border-bottom:1px solid var(--bd); background:var(--sb-bg); }
+  button { background:#243242; color:var(--fg); border:1px solid var(--bd); border-radius:4px;
+    height:28px; min-width:30px; cursor:pointer; font-size:15px; line-height:1; }
+  button:hover { background:#33465c; }
+  button:active { background:var(--acc); color:#0b1216; }
+  #sb-url { flex:1; height:28px; border:1px solid var(--bd); border-radius:14px; background:var(--inp);
+    color:#fff; padding:0 12px; font-size:12.5px; outline:0; user-select:text; }
+  #sb-url:focus { border-color:var(--acc); }
+  #title { font-size:11px; color:#8fa3b8; margin-right:2px; white-space:nowrap; opacity:.7; }
+  #close, #min { position:absolute; top:11px; min-width:32px; height:24px; font-size:13px; }
+  #close { left:6px; } #min { left:42px; }
+  #close:hover { background:#c54444; border-color:#e06c6c; }
+  #tabs { display:flex; gap:4px; align-items:center; height:26px; padding:0 8px 0 80px; overflow-x:auto; background:#0f1419; border-bottom:1px solid var(--bd); box-sizing:border-box; }
+  .tab { background:#1e2630; color:#9aa4ac; border:1px solid var(--bd); border-radius:4px 4px 0 0;
+    height:22px; padding:0 8px; font-size:11px; cursor:pointer; white-space:nowrap; max-width:140px; overflow:hidden; text-overflow:ellipsis; }
+  .tab.active { background:#243242; color:#fff; border-bottom-color:#243242; }
+  .tab .x { margin-left:6px; color:#6b7a8a; }
+  .tab .x:hover { color:#e06c6c; }
+  #newtab { min-width:24px; height:20px; font-size:14px; padding:0 4px; }
+  #status { font-size:11px; color:#8fa3b8; max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #status.ok { color:#3ddc97; } #status.err { color:#e06c6c; } #status.busy { color:#f5c451; }
+  #dots { font-size:16px; line-height:1; letter-spacing:1px; }
+  /* ---- 3-dot dropdown menu ---- */
+  #menu { position:absolute; top:60px; right:8px; width:220px; max-height:340px; overflow-y:auto;
+    background:#1a222c; border:1px solid var(--bd); border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.55); padding:3px; z-index:99; display:none; }
+  #menu.open { display:block; }
+  .mitem { display:flex; align-items:center; gap:6px; padding:5px 8px; border-radius:5px; cursor:pointer;
+    font-size:12px; color:var(--fg); white-space:nowrap; }
+  .mitem:hover { background:#263341; }
+  .mitem .ic { width:14px; text-align:center; opacity:.8; font-size:12px; }
+  .msub { padding:6px 8px 2px 8px; border-top:1px solid #233041; margin-top:2px; }
+  .mlabel { font-size:10px; color:#8fa3b8; margin-bottom:4px; letter-spacing:.4px; }
+  #opa { width:100%; accent-color:#36c5f0; display:block; height:14px; }
+  #opav { font-size:10px; color:#8fa3b8; display:block; text-align:right; margin-top:1px; }
+  #alock { width:100%; height:24px; border:1px solid var(--bd); border-radius:4px; background:var(--inp);
+    color:var(--fg); font-size:11px; }
+  #bmlist { position:absolute; left:78px; right:0; top:0; bottom:0; display:flex; align-items:center; gap:6px;
+    padding:0 8px; background:#0f1419; border-bottom:1px solid var(--bd); overflow-x:auto; overflow-y:hidden; z-index:9; }
+  #bmlist[hidden] { display:none; }
+  #bmchips { display:flex; gap:6px; align-items:center; flex:1 1 auto; min-width:0; overflow-x:auto; }
+  .chip { flex:0 0 auto; background:#1e2630; border:1px solid var(--bd); border-radius:12px; color:#dbe4ee;
+    font-size:11px; padding:3px 9px; white-space:nowrap; max-width:190px; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+  .chip:hover { background:#243242; }
+  .chip .x { margin-left:7px; color:#6b7a8a; }
+  .chip .x:hover { color:#e06c6c; }
+  #bmadd { min-width:86px; font-size:11.5px; } #bmclose { min-width:26px; }
+  #prof { height:24px; min-width:78px; font-size:11px; border-radius:12px; padding:0 8px; border:1px solid var(--bd); }
+  #kbtn { min-width:28px; font-size:12px; }
+  #palette { position:absolute; left:78px; right:8px; top:74px; background:#1a222c; border:1px solid var(--bd);
+    border-radius:8px; box-shadow:0 12px 32px rgba(0,0,0,.55); z-index:120; display:none; overflow:hidden; }
+  #palette.open { display:block; }
+  #pq { width:100%; height:32px; border:0; border-bottom:1px solid var(--bd); background:var(--inp); color:#fff;
+    padding:0 12px; font-size:13px; outline:0; box-sizing:border-box; }
+  #plist { max-height:280px; overflow-y:auto; }
+  .prow { display:flex; gap:8px; align-items:center; padding:7px 10px; font-size:12px; cursor:pointer; }
+  .prow:hover, .prow.sel { background:#263341; }
+  .pk { font-size:10px; color:#8fa3b8; min-width:54px; text-transform:uppercase; letter-spacing:.3px; }
+  .pt { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pu { color:#8fa3b8; font-size:11px; max-width:42%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #dllist, #histlist { position:absolute; left:78px; right:0; top:0; bottom:0; display:flex; flex-direction:column;
+    gap:4px; padding:6px 8px; background:#0f1419; border-bottom:1px solid var(--bd); overflow-y:auto; z-index:9; }
+  #dllist[hidden], #histlist[hidden] { display:none; }
+  .drow { display:flex; gap:8px; align-items:center; font-size:11px; padding:3px 4px; cursor:pointer; }
+  .drow:hover { background:#1e2630; }
+  #versionWarning { display:none; position:absolute; right:36px; top:34px; z-index:130; height:22px; border:1px solid #f5c451; border-radius:11px; background:#392e16; color:#ffe19a; font-size:10px; padding:0 8px; white-space:nowrap; }
+  #splitHandle { display:none; position:fixed; left:0;top:0;width:8px;height:100vh;z-index:200;cursor:col-resize;background:transparent; }
+  body.split-mode #splitHandle { display:block; }
+  body.split-mode #close { left:14px; } body.split-mode #min { left:50px; }
+  body.split-mode #top { padding-left:86px; } body.split-mode #tabs { padding-left:88px; }
+</style>
+</head>
+<body>
+<div id="splitHandle" title="Drag to resize"></div>
+<div id="tabs">
+  <button id="newtab" title="New tab" onclick="sbSend('sb-newtab')">+</button>
+</div>
+<div id="top">
+  <span id="title">SB</span>
+  <select id="prof" title="Profile"></select>
+  <button title="Back" onclick="sbSend('sb-back')">&#8249;</button>
+  <button title="Forward" onclick="sbSend('sb-fwd')">&#8250;</button>
+  <button title="Reload" onclick="sbSend('sb-reload')">&#10227;</button>
+  <button title="Home" onclick="sbSend('sb-home')">&#8962;</button>
+  <input id="sb-url" placeholder="youtube.com / type search..." spellcheck="false" autocomplete="off">
+  <button id="kbtn" title="Command palette (Ctrl+K)">K</button>
+  <button id="versionWarning" title="Re-patch Slack after its update"></button>
+  <span id="status"></span>
+  <button id="dots" title="Settings: update, bookmarks, transparency, auto-lock">&#8943;</button>
+</div>
+<button id="close" title="Browser full exit" onclick="sbSend('sb-hide')">&#10005;</button>
+<button id="min" title="Minimize (locks the browser)" onclick="sbSend('sb-min')">&#8722;</button>
+<div id="menu">
+  <div class="mitem" id="m-upd"><span class="ic">&#10227;</span>Check for updates</div>
+  <div class="mitem" id="m-bm"><span class="ic">&#9733;</span>Bookmarks</div>
+  <div class="mitem" id="m-hist"><span class="ic">H</span>History</div>
+  <div class="mitem" id="m-dl"><span class="ic">D</span>Downloads</div>
+  <div class="mitem" id="m-k"><span class="ic">K</span>Command palette (Ctrl+K)</div>
+  <div class="mitem" id="m-sys"><span class="ic">&gt;</span>Open in system browser</div>
+  <div class="mitem" id="m-copy"><span class="ic">C</span>Copy URL</div>
+  <div class="mitem" id="m-slack"><span class="ic">S</span>Add to Slack message</div>
+  <div class="mitem" id="m-pip"><span class="ic">P</span>Picture in Picture</div>
+  <div class="mitem" id="m-focus"><span class="ic">F</span>Toggle focus mode</div>
+  <div class="mitem" id="m-settings"><span class="ic">&#9881;</span>Settings &amp; repair</div>
+  <div class="mitem" id="m-dev"><span class="ic">&#128736;</span>DevTools</div>
+  <div class="msub">
+    <div class="mlabel">TRANSPARENCY (SEE SLACK BEHIND)</div>
+    <input id="opa" type="range" min="20" max="100" step="1" value="100">
+    <span id="opav">100%</span>
+  </div>
+  <div class="msub">
+    <div class="mlabel">AUTO-LOCK AFTER LEAVING / MINIMIZE</div>
+    <select id="alock">
+      <option value="0">Off</option>
+      <option value="10">10 seconds</option>
+      <option value="30">30 seconds (default)</option>
+      <option value="60">1 minute</option>
+      <option value="300">5 minutes</option>
+      <option value="3600">1 hour</option>
+    </select>
+  </div>
+</div>
+  <div id="bmlist" hidden>
+  <button id="bmadd" title="Bookmark the current page">+ Bookmark</button>
+  <span id="bmchips"></span>
+  <button id="bmclose" title="Close bookmarks">&times;</button>
+</div>
+<div id="histlist" hidden></div>
+<div id="dllist" hidden></div>
+<div id="palette">
+  <input id="pq" placeholder="Search bookmarks, tabs, history, actions..." spellcheck="false">
+  <div id="plist"></div>
+</div>
+<script>
+  const input = document.getElementById('sb-url');
+  const tabsEl = document.getElementById('tabs');
+  const newtabBtn = document.getElementById('newtab');
+  let lastInfo = null;   // latest sb-update payload, source of the current url/title
+  function send(ch, v) { if (typeof window.sbSend === 'function') window.sbSend(ch, v); }
+  function go() { const v = input.value.trim(); if (v) send('sb-go', v); }
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  function renderTabs(info) {
+    tabsEl.querySelectorAll('.tab').forEach((n) => n.remove());
+    const tabs = (info && info.tabs) || [];
+    tabs.forEach((t) => {
+      const d = document.createElement('div');
+      d.className = 'tab' + (t.active ? ' active' : '');
+      d.title = t.url || '';
+      d.textContent = (t.title || t.url || 'tab').slice(0, 22);
+      d.addEventListener('click', (e) => { if (e.target.classList.contains('x')) return; send('sb-switchtab', t.id); });
+      const x = document.createElement('span');
+      x.className = 'x';
+      x.textContent = '×';
+      x.addEventListener('click', (e) => { e.stopPropagation(); send('sb-closetab', t.id); });
+      d.appendChild(x);
+      tabsEl.insertBefore(d, newtabBtn);
+    });
+  }
+  const versionWarning = document.getElementById('versionWarning');
+  versionWarning.addEventListener('click', () => {
+    if (!confirm('Re-patching closes and restarts Slack and requires Administrator approval. Continue?')) return;
+    send('sb-repatch');
+  });
+  if (typeof window.sbOnTheme === 'function') window.sbOnTheme((theme) => {
+    if (theme && theme.background) document.documentElement.style.setProperty('--sb-bg', theme.background);
+    if (theme && theme.foreground) document.documentElement.style.setProperty('--sb-fg', theme.foreground);
+  });
+  if (typeof window.sbOnUpdate === 'function') {
+    window.sbOnUpdate((info) => {
+      try {
+        lastInfo = info || lastInfo;
+        if (document.activeElement !== input) input.value = (info && info.url || '').replace(/^https?:\/\//, '');
+        renderTabs(info);
+        try { paintProfiles(info); } catch (_) {}
+        document.body.classList.toggle('split-mode', info && info.mode === 'split');
+        const ratio = Number(info && info.splitRatio);
+        if (isFinite(ratio)) document.getElementById('splitHandle').title = 'Drag to resize: Slack ' + Math.round(ratio * 100) + '%';
+        versionWarning.textContent = info && info.versionWarning ? 'Slack updated · Re-patch' : '';
+        versionWarning.style.display = info && info.versionWarning ? 'block' : 'none';
+      } catch (_) {}
+    });
+  }
+  const statusEl = document.getElementById('status');
+  let statusTimer = 0;
+  function setStatus(text, kind) {
+    statusEl.textContent = text || '';
+    statusEl.className = kind || '';
+    clearTimeout(statusTimer);
+    if (text && kind !== 'busy') statusTimer = setTimeout(() => { statusEl.textContent = ''; statusEl.className = ''; }, 12000);
+  }
+  if (typeof window.sbOnStatus === 'function') window.sbOnStatus((s) => setStatus(s && s.text, s && s.kind));
+  // ---- 3-dot menu
+  const menu = document.getElementById('menu');
+  document.getElementById('dots').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = !menu.classList.contains('open');
+    menu.classList.toggle('open');
+    send('sb-menu', willOpen);
+  });
+  menu.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', () => {
+    if (menu.classList.contains('open')) { menu.classList.remove('open'); send('sb-menu', false); }
+    if (palette.classList.contains('open')) { palette.classList.remove('open'); send('sb-palette-close'); }
+  });
+  document.getElementById('m-upd').addEventListener('click', () => {
+    setStatus('checking GitHub...', 'busy');
+    menu.classList.remove('open');
+    send('sb-menu', false);
+    send('sb-update-check');
+  });
+  document.getElementById('m-dev').addEventListener('click', () => { menu.classList.remove('open'); send('sb-menu', false); send('sb-devtools'); });
+  document.getElementById('m-pip').addEventListener('click', () => { menu.classList.remove('open'); send('sb-menu', false); send('sb-picture-in-picture'); });
+  document.getElementById('m-focus').addEventListener('click', () => { menu.classList.remove('open'); send('sb-menu', false); send('sb-focus-toggle'); });
+  document.getElementById('m-settings').addEventListener('click', () => { menu.classList.remove('open'); send('sb-menu', false); send('sb-open-settings'); });
+  // ---- bookmarks (menu opens the chip bar)
+  const bmPanel = document.getElementById('bmlist');
+  const bmChips = document.getElementById('bmchips');
+  function renderBM(list) {
+    bmChips.textContent = '';
+    (Array.isArray(list) ? list : []).forEach((b) => {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.title = b.url;
+      chip.textContent = String(b.title || b.url).slice(0, 30);
+      chip.addEventListener('click', (e) => {
+        if (e.target.classList.contains('x')) return;
+        send('sb-go', b.url);
+        bmPanel.setAttribute('hidden', '');
+      });
+      const x = document.createElement('span');
+      x.className = 'x';
+      x.textContent = '×';
+      x.addEventListener('click', (e) => { e.stopPropagation(); delBM(b.url); });
+      chip.appendChild(x);
+      bmChips.appendChild(chip);
+    });
+  }
+  function delBM(url) {
+    Promise.resolve(window.sbInvoke('sb-bm-del', { url: url })).then(renderBM).catch(() => {});
+  }
+  function toggleBM(force) {
+    const open = force === undefined ? bmPanel.hasAttribute('hidden') : !!force;
+    if (open) { bmPanel.removeAttribute('hidden'); Promise.resolve(window.sbInvoke('sb-bm-list')).then(renderBM).catch(() => {}); } else bmPanel.setAttribute('hidden', '');
+  }
+  document.getElementById('m-bm').addEventListener('click', () => { menu.classList.remove('open'); send('sb-menu', false); toggleBM(); });
+  document.getElementById('bmclose').addEventListener('click', () => toggleBM(false));
+  document.getElementById('bmadd').addEventListener('click', () => {
+    const u = (lastInfo && lastInfo.url) || input.value.trim();
+    if (!u) { setStatus('nothing to bookmark', 'err'); return; }
+    const t = (lastInfo && lastInfo.title) || u;
+    Promise.resolve(window.sbInvoke('sb-bm-add', { url: u, title: t })).then((list) => {
+      renderBM(list);
+      setStatus('bookmarked', 'ok');
+    }).catch(() => setStatus('bookmark failed', 'err'));
+  });
+  // ---- transparency: only what the page does NOT paint stays see-through,
+  // so text stays readable while the Slack DM behind shows through
+  const opa = document.getElementById('opa');
+  const opav = document.getElementById('opav');
+  function paintOpa() { opav.textContent = opa.value + '%'; }
+  opa.addEventListener('input', () => { paintOpa(); send('sb-opacity', Number(opa.value)); });
+  paintOpa();
+  Promise.resolve(window.sbInvoke && window.sbInvoke('sb-opacity-get')).then((v) => {
+    if (typeof v === 'number' && v >= 20 && v <= 100) { opa.value = String(v); paintOpa(); }
+  }).catch(() => {});
+  // ---- auto-lock duration (seconds; 0 = off), persisted in sb_ui.json
+  const alock = document.getElementById('alock');
+  alock.addEventListener('change', () => {
+    const v = Number(alock.value) || 0;
+    send('sb-autolock', v);
+    setStatus('auto-lock: ' + (v ? (v >= 60 ? (v / 60) + ' min' : v + ' s') : 'off'), 'ok');
+  });
+  Promise.resolve(window.sbInvoke && window.sbInvoke('sb-autolock-get')).then((v) => {
+    if (isFinite(Number(v))) alock.value = String(Number(v));
+  }).catch(() => {});
+  try { window.sbToggleBM = toggleBM; } catch (_) {}
+  const prof = document.getElementById('prof');
+  function paintProfiles(info) {
+    const list = (info && info.profiles) || [];
+    const cur = (info && info.profile && info.profile.id) || '';
+    if (!list.length) return;
+    const same = prof.options.length === list.length && Array.prototype.every.call(prof.options, (o, i) => o.value === list[i].id);
+    if (!same) {
+      prof.textContent = '';
+      list.forEach((p) => {
+        const o = document.createElement('option');
+        o.value = p.id; o.textContent = p.name || p.id;
+        prof.appendChild(o);
+      });
+    }
+    if (cur) prof.value = cur;
+    if (info && info.profile && info.profile.color) prof.style.borderColor = info.profile.color;
+  }
+  prof.addEventListener('change', () => send('sb-profile-switch', prof.value));
+  const palette = document.getElementById('palette');
+  const pq = document.getElementById('pq');
+  const plist = document.getElementById('plist');
+  let palItems = [];
+  let palSel = 0;
+  function paintPalette(items) {
+    palItems = Array.isArray(items) ? items : [];
+    if (palSel >= palItems.length) palSel = 0;
+    plist.textContent = '';
+    palItems.forEach((it, i) => {
+      const row = document.createElement('div');
+      row.className = 'prow' + (i === palSel ? ' sel' : '');
+      const k = document.createElement('span'); k.className = 'pk'; k.textContent = it.kind || '';
+      const t = document.createElement('span'); t.className = 'pt'; t.textContent = it.title || it.url || '';
+      const u = document.createElement('span'); u.className = 'pu'; u.textContent = it.url ? String(it.url).replace(/^https?:\/\//, '') : '';
+      row.appendChild(k); row.appendChild(t); row.appendChild(u);
+      row.addEventListener('mousedown', (e) => { e.preventDefault(); send('sb-palette-run', it); });
+      plist.appendChild(row);
+    });
+  }
+  function queryPalette() {
+    Promise.resolve(window.sbInvoke && window.sbInvoke('sb-palette-query', pq.value)).then(paintPalette).catch(() => paintPalette([]));
+  }
+  function openPalette(on) {
+    if (on) { palette.classList.add('open'); pq.value = ''; queryPalette(); setTimeout(() => pq.focus(), 30); }
+    else { palette.classList.remove('open'); }
+  }
+  if (typeof window.sbOnPalette === 'function') window.sbOnPalette((s) => openPalette(s && s.open));
+  document.getElementById('kbtn').addEventListener('click', (e) => { e.stopPropagation(); send('sb-palette-toggle'); });
+  palette.addEventListener('click', (e) => e.stopPropagation());
+  pq.addEventListener('input', queryPalette);
+  pq.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); palSel = Math.min(palItems.length - 1, palSel + 1); paintPalette(palItems); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); palSel = Math.max(0, palSel - 1); paintPalette(palItems); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (palItems[palSel]) send('sb-palette-run', palItems[palSel]); }
+    else if (e.key === 'Escape') { send('sb-palette-close'); palette.classList.remove('open'); }
+  });
+  const histPanel = document.getElementById('histlist');
+  const dlPanel = document.getElementById('dllist');
+  function renderRows(el, list, kind) {
+    el.textContent = '';
+    const close = document.createElement('button'); close.textContent = 'x'; close.style.alignSelf = 'flex-end';
+    close.addEventListener('click', () => el.setAttribute('hidden', ''));
+    el.appendChild(close);
+    (Array.isArray(list) ? list : []).forEach((r) => {
+      const d = document.createElement('div');
+      d.className = 'drow';
+      if (kind === 'dl') {
+        d.dataset.downloadId = r.id || '';
+        const total = Number(r.total) || 0;
+        const bytes = Number(r.bytes) || 0;
+        const progress = total ? ' · ' + Math.min(100, Math.round(bytes * 100 / total)) + '%' : '';
+        d.textContent = (r.filename || r.url || '').slice(0, 58) + ' · ' + (r.state || 'unknown') + progress;
+      } else {
+        d.textContent = (r.title || r.url || '').slice(0, 80);
+      }
+      d.title = r.url || '';
+      d.addEventListener('click', () => {
+        if (kind === 'dl' && r.path) send('sb-download-open', r);
+        else if (r.url) send('sb-go', r.url);
+        el.setAttribute('hidden', '');
+      });
+      el.appendChild(d);
+    });
+  }
+  if (typeof window.sbOnDownloadProgress === 'function') window.sbOnDownloadProgress((progress) => {
+    const row = Array.from(dlPanel.querySelectorAll('[data-download-id]')).find((node) => node.dataset.downloadId === progress.id);
+    if (!row) return;
+    const total = Number(progress.total) || 0;
+    const bytes = Number(progress.bytes) || 0;
+    row.textContent = (row.textContent.split(' · ')[0] || 'Download') + ' · ' + progress.state + (total ? ' · ' + Math.min(100, Math.round(bytes * 100 / total)) + '%' : '');
+  });
+  document.getElementById('m-hist').addEventListener('click', () => {
+    menu.classList.remove('open'); send('sb-menu', false);
+    Promise.resolve(window.sbInvoke('sb-history-list')).then((list) => { histPanel.removeAttribute('hidden'); renderRows(histPanel, list, 'hist'); }).catch(() => {});
+  });
+  document.getElementById('m-dl').addEventListener('click', () => {
+    menu.classList.remove('open'); send('sb-menu', false);
+    Promise.resolve(window.sbInvoke('sb-downloads-list')).then((list) => { dlPanel.removeAttribute('hidden'); renderRows(dlPanel, list, 'dl'); }).catch(() => {});
+  });
+  document.getElementById('m-k').addEventListener('click', () => { menu.classList.remove('open'); send('sb-menu', false); send('sb-palette-toggle'); });
+  document.getElementById('m-sys').addEventListener('click', () => { menu.classList.remove('open'); send('sb-menu', false); send('sb-open-system'); });
+  document.getElementById('m-copy').addEventListener('click', () => { menu.classList.remove('open'); send('sb-menu', false); send('sb-copy-url'); });
+  document.getElementById('m-slack').addEventListener('click', () => { menu.classList.remove('open'); send('sb-menu', false); send('sb-slack-msg'); });
+  const splitHandle = document.getElementById('splitHandle');
+  let splitDragging = false;
+  splitHandle.addEventListener('pointerdown', (event) => {
+    splitDragging = true;
+    splitHandle.setPointerCapture(event.pointerId);
+    send('sb-split-ratio-drag', event.screenX);
+  });
+  splitHandle.addEventListener('pointermove', (event) => {
+    if (splitDragging) send('sb-split-ratio-drag', event.screenX);
+  });
+  splitHandle.addEventListener('pointerup', () => { splitDragging = false; });
+  splitHandle.addEventListener('pointercancel', () => { splitDragging = false; });
+</script>
+</body>
+</html>

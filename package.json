@@ -1,0 +1,13 @@
+{
+  "name": "slack-sidebrowser",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Sidebrowser for the Slack desktop app",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

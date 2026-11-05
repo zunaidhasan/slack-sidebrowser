@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#141a21; --inp:#1e2630; --bd:#2c3a47; --fg:#dbe4ee; --acc:#36c5f0; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--sb-bg,var(--bg)); color:var(--sb-fg,var(--fg));
+    font-family:"Segoe UI",Arial,sans-serif; user-select:none; border:1px solid var(--bd); box-sizing:border-box; }
+  #wrap { padding:10px 12px; display:flex; flex-direction:column; gap:8px; height:100%; box-sizing:border-box; overflow-y:auto; }
+  h3 { margin:0 0 2px 0; font-size:12px; color:#8fa3b8; letter-spacing:.6px; }
+  .row { display:flex; gap:6px; }
+  .btn { flex:1; background:#243242; color:var(--fg); border:1px solid var(--bd); border-radius:4px;
+    height:26px; cursor:pointer; font-size:12px; }
+  .btn:hover { background:#33465c; }
+  .btn:active { background:var(--acc); color:#0b1216; }
+  .sec { border-top:1px solid #233041; padding-top:8px; }
+  .lbl { font-size:10.5px; color:#8fa3b8; margin-bottom:4px; letter-spacing:.4px; }
+  #opa { width:100%; accent-color:#36c5f0; height:14px; }
+  #opav { font-size:10.5px; color:#8fa3b8; text-align:right; margin-top:1px; }
+  #alock { width:100%; height:24px; border:1px solid var(--bd); border-radius:4px; background:var(--inp);
+    color:var(--fg); font-size:11.5px; }
+  #status { font-size:10.5px; color:#8fa3b8; min-height:12px; }
+  #status.ok { color:#3ddc97; } #status.err { color:#e06c6c; } #status.busy { color:#f5c451; }
+  .field { width:100%;height:24px;margin-top:5px;border:1px solid var(--bd);border-radius:4px;background:var(--inp);color:var(--fg);font-size:11.5px;box-sizing:border-box;padding:0 8px; }
+  .inline { display:flex;align-items:center;gap:8px;font-size:11px;color:#8fa3b8; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h3>SLACK BROWSER SETTINGS</h3>
+  <div class="row">
+    <button class="btn" id="b-upd">⟳ Update</button>
+    <button class="btn" id="b-bm">☆ Bookmarks</button>
+    <button class="btn" id="b-dev">⚙ DevTools</button>
+  </div>
+  <div id="status"></div>
+  <div class="sec">
+    <div class="lbl">HEALTH &amp; REPAIR</div>
+    <div class="row">
+      <button class="btn" id="b-health">Check health</button>
+      <button class="btn" id="b-repair">Re-patch Slack</button>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="lbl">TRANSPARENCY (SLACK SHOWS BEHIND)</div>
+    <input id="opa" type="range" min="20" max="100" step="1" value="100">
+    <span id="opav">100%</span>
+  </div>
+  <div class="sec">
+    <div class="lbl">AUTO-LOCK AFTER LEAVING / MINIMIZE</div>
+    <select id="alock">
+      <option value="0">Off</option>
+      <option value="10">10 seconds</option>
+      <option value="30">30 seconds (default)</option>
+      <option value="60">1 minute</option>
+      <option value="300">5 minutes</option>
+      <option value="3600">1 hour</option>
+    </select>
+  </div>
+  <div class="sec">
+    <div class="lbl">PROFILE</div>
+    <select id="prof" style="width:100%;height:24px;border:1px solid var(--bd);border-radius:4px;background:var(--inp);color:var(--fg);font-size:11.5px"></select>
+    <input id="profileName" class="field" placeholder="Profile name" maxlength="40">
+    <input id="home" class="field" placeholder="https://example.com">
+    <label class="inline">Profile color <input id="profileColor" type="color" value="#36c5f0"></label>
+    <div class="row" style="margin-top:6px">
+      <button class="btn" id="b-home">Set home</button>
+      <button class="btn" id="b-addp">+ Profile</button>
+    </div>
+    <div class="row">
+      <button class="btn" id="b-renamep">Rename</button>
+      <button class="btn" id="b-delp">Delete</button>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="lbl">SIDE-PANEL MODE</div>
+    <select id="panelMode" class="field">
+      <option value="overlay">Overlay</option>
+      <option value="split">Split view</option>
+      <option value="focus">Focus mode</option>
+    </select>
+    <label class="inline">Slack width <input id="splitRatio" type="range" min="20" max="70" step="1" value="50"><span id="splitValue">50%</span></label>
+  </div>
+  <div class="sec">
+    <div class="lbl">CONTEXT</div>
+    <label class="inline"><input id="contextLinks" type="checkbox"> Show “Open here” on links in my own DM</label>
+  </div>
+  <div class="sec">
+    <div class="lbl">PRIVACY</div>
+    <button class="btn" id="b-block" style="width:100%">Ad blocker: on</button>
+  </div>
+  <div class="sec">
+    <div class="lbl">PIN</div>
+    <button class="btn" id="b-pin" style="width:100%">Change PIN</button>
+  </div>
+  <div class="sec">
+    <div class="lbl">SECRET PHRASE</div>
+    <button class="btn" id="b-phrase" style="width:100%">Change Phrase</button>
+  </div>
+</div>
+<script>
+  function send(ch, v) { if (typeof window.sbSend === 'function') window.sbSend(ch, v); }
+  const statusEl = document.getElementById('status');
+  function setStatus(text, kind) { statusEl.textContent = text || ''; statusEl.className = kind || ''; }
+  function checkHealth() {
+    Promise.resolve(window.sbInvoke && window.sbInvoke('sb-health-check')).then((result) => {
+      setStatus(result && result.text, result && result.kind);
+    }).catch((err) => {
+      setStatus('health check failed: ' + String(err && err.message || err), 'err');
+    });
+  }
+  document.getElementById('b-health').addEventListener('click', checkHealth);
+  document.getElementById('b-repair').addEventListener('click', () => {
+    if (!confirm('Re-patching will close and restart Slack. Continue?')) return;
+    setStatus('requesting Administrator approval; Slack will close and restart', 'busy');
+    send('sb-repatch');
+  });
+  checkHealth();
+  document.getElementById('b-upd').addEventListener('click', () => {
+    setStatus('checking GitHub...', 'busy');
+    send('sb-update-check');
+  });
+  document.getElementById('b-dev').addEventListener('click', () => { send('sb-devtools'); });
+  document.getElementById('b-pin').addEventListener('click', () => {
+    setStatus('verifying current PIN...', 'busy');
+    send('sb-change-pin');
+    setTimeout(() => setStatus('', ''), 1500);
+  });
+  document.getElementById('b-phrase').addEventListener('click', () => {
+    setStatus('opening phrase editor...', 'busy');
+    send('sb-change-phrase');
+    setTimeout(() => setStatus('', ''), 1500);
+  });
+  document.getElementById('b-bm').addEventListener('click', () => { send('sb-open-bookmarks'); });
+  if (typeof window.sbOnStatus === 'function') window.sbOnStatus((s) => setStatus(s && s.text, s && s.kind));
+  // transparency
+  const opa = document.getElementById('opa');
+  const opav = document.getElementById('opav');
+  function paintOpa() { opav.textContent = opa.value + '%'; }
+  opa.addEventListener('input', () => { paintOpa(); send('sb-opacity', Number(opa.value)); });
+  paintOpa();
+  Promise.resolve(window.sbInvoke && window.sbInvoke('sb-opacity-get')).then((v) => {
+    if (typeof v === 'number' && v >= 20 && v <= 100) { opa.value = String(v); paintOpa(); }
+  }).catch(() => {});
+  // auto-lock
+  const alock = document.getElementById('alock');
+  alock.addEventListener('change', () => {
+    const v = Number(alock.value) || 0;
+    send('sb-autolock', v);
+    setStatus('auto-lock: ' + (v ? (v >= 60 ? (v / 60) + ' min' : v + ' s') : 'off'), 'ok');
+  });
+  Promise.resolve(window.sbInvoke && window.sbInvoke('sb-autolock-get')).then((v) => {
+    if (isFinite(Number(v))) alock.value = String(Number(v));
+  }).catch(() => {});
+  const prof = document.getElementById('prof');
+  const home = document.getElementById('home');
+  const profileName = document.getElementById('profileName');
+  const profileColor = document.getElementById('profileColor');
+  let profiles = [];
+  function reportFailure(action, err) {
+    setStatus(action + ' failed: ' + String(err && err.message || err), 'err');
+  }
+  function loadProfiles() {
+    Promise.resolve(window.sbInvoke && window.sbInvoke('sb-profiles')).then((r) => {
+      const list = (r && r.list) || [];
+      profiles = list;
+      const active = (r && r.active) || '';
+      prof.textContent = '';
+      list.forEach((p) => {
+        const o = document.createElement('option');
+        o.value = p.id; o.textContent = p.name || p.id;
+        if (p.id === active) { o.selected = true; home.value = p.home || ''; profileName.value = p.name || ''; profileColor.value = p.color || '#36c5f0'; }
+        prof.appendChild(o);
+      });
+      document.getElementById('b-delp').disabled = list.length <= 1;
+    }).catch((err) => reportFailure('Loading profiles', err));
+  }
+  loadProfiles();
+  prof.addEventListener('change', () => {
+    const selected = profiles.find((p) => p.id === prof.value);
+    if (selected) { home.value = selected.home || ''; profileName.value = selected.name || ''; profileColor.value = selected.color || '#36c5f0'; }
+    send('sb-profile-switch', prof.value);
+  });
+  document.getElementById('b-home').addEventListener('click', () => {
+    Promise.resolve(window.sbInvoke('sb-profile-home', { id: prof.value, home: home.value })).then(() => { setStatus('home saved', 'ok'); loadProfiles(); }).catch((err) => reportFailure('Saving home URL', err));
+  });
+  document.getElementById('b-addp').addEventListener('click', () => {
+    const name = prompt('Profile name');
+    if (!name) return;
+    Promise.resolve(window.sbInvoke('sb-profile-add', { name: name, color: profileColor.value, home: home.value })).then(() => { setStatus('profile created', 'ok'); loadProfiles(); }).catch((err) => reportFailure('Adding profile', err));
+  });
+  document.getElementById('b-renamep').addEventListener('click', () => {
+    Promise.all([
+      window.sbInvoke('sb-profile-rename', { id: prof.value, name: profileName.value }),
+      window.sbInvoke('sb-profile-color', { id: prof.value, color: profileColor.value }),
+    ]).then(() => { setStatus('profile saved', 'ok'); loadProfiles(); }).catch((err) => reportFailure('Saving profile', err));
+  });
+  document.getElementById('b-delp').addEventListener('click', () => {
+    const selected = profiles.find((p) => p.id === prof.value);
+    if (!selected || !confirm('Delete profile "' + selected.name + '"? Its saved browser data will remain on disk.')) return;
+    Promise.resolve(window.sbInvoke('sb-profile-del', selected.id)).then(() => { setStatus('profile deleted', 'ok'); loadProfiles(); }).catch((err) => reportFailure('Deleting profile', err));
+  });
+  const panelMode = document.getElementById('panelMode');
+  const splitRatio = document.getElementById('splitRatio');
+  const splitValue = document.getElementById('splitValue');
+  function paintSplitRatio(value) {
+    const percent = Math.max(20, Math.min(70, Math.round(Number(value) * 100)));
+    splitRatio.value = String(percent);
+    splitValue.textContent = percent + '%';
+  }
+  Promise.resolve(window.sbInvoke && window.sbInvoke('sb-ui-get')).then((ui) => {
+    if (ui) {
+      panelMode.value = ui.panelMode || 'overlay';
+      paintSplitRatio(ui.splitRatio || 0.5);
+      document.getElementById('contextLinks').checked = ui.contextLinks === true;
+    }
+  }).catch((err) => reportFailure('Loading preferences', err));
+  panelMode.addEventListener('change', () => {
+    Promise.resolve(window.sbInvoke('sb-panel-mode', panelMode.value)).then(() => setStatus('mode: ' + panelMode.options[panelMode.selectedIndex].text, 'ok')).catch((err) => reportFailure('Changing mode', err));
+  });
+  splitRatio.addEventListener('input', () => {
+    const ratio = Number(splitRatio.value) / 100;
+    paintSplitRatio(ratio);
+    Promise.resolve(window.sbInvoke('sb-split-ratio', ratio)).catch((err) => reportFailure('Saving split width', err));
+  });
+  document.getElementById('contextLinks').addEventListener('change', (event) => {
+    Promise.resolve(window.sbInvoke('sb-context-links', event.target.checked)).then(() => setStatus('context link buttons ' + (event.target.checked ? 'enabled' : 'disabled'), 'ok')).catch((err) => reportFailure('Updating link preference', err));
+  });
+  if (typeof window.sbOnTheme === 'function') window.sbOnTheme((theme) => {
+    if (theme && theme.background) document.documentElement.style.setProperty('--sb-bg', theme.background);
+    if (theme && theme.foreground) document.documentElement.style.setProperty('--sb-fg', theme.foreground);
+  });
+  const bBlock = document.getElementById('b-block');
+  function paintBlock(on) { bBlock.textContent = 'Ad blocker: ' + (on ? 'on' : 'off'); }
+  Promise.resolve(window.sbInvoke && window.sbInvoke('sb-blocker-get')).then(paintBlock).catch(() => {});
+  bBlock.addEventListener('click', () => {
+    const on = /off$/i.test(bBlock.textContent);
+    send('sb-blocker-set', on);
+    paintBlock(on);
+  });
+</script>
+</body>
+</html>

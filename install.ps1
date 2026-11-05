@@ -15,7 +15,7 @@ $sumsUrl = "https://github.com/$repo/releases/latest/download/SHA256SUMS.txt"
 $mod     = Join-Path $env:USERPROFILE '.slack-browser'
 $work    = Join-Path $env:TEMP ('sb-install-' + [Guid]::NewGuid().ToString('N'))
 $zip     = Join-Path $work 'slack-browser-install.zip'
-$payload = @('apply-store-patch.ps1','apply-msix-patch.ps1','sb_main.js','sb_update.cjs','sb_store.cjs','sb_blocker.cjs','sb_search.cjs','sb_easylist.txt','sb_preload.cjs','sb_content_preload.cjs','sb_toolbar.html','sb_toolbar_preload.cjs','sb_unlock.html','sb_settings.html','sb_phrase.html')
+$payload = @('apply-store-patch.ps1','apply-msix-patch.ps1','sb_main.js','sb_update.cjs','sb_store.cjs','sb_lock.cjs','sb_tabs.cjs','sb_blocker.cjs','sb_search.cjs','sb_easylist.txt','sb_preload.cjs','sb_content_preload.cjs','sb_toolbar.html','sb_toolbar_preload.cjs','sb_unlock.html','sb_settings.html','sb_phrase.html','sb_onboarding.html','uninstall.ps1')
 
 function Say($m) { Write-Host "[sb] $m" }
 
@@ -31,14 +31,14 @@ try {
   New-Item -ItemType Directory -Force -Path $work | Out-Null
   Say 'downloading package from GitHub Releases...'
   try {
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing -ProxyUseDefaultCredentials
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing
     if ((Get-Item $zip).Length -lt 1KB) { throw 'release package is empty' }
   } catch {
     throw "Release download failed. Check your network or proxy configuration. Details: $($_.Exception.Message)"
   }
   try {
     $sums = Join-Path $work 'SHA256SUMS.txt'
-    Invoke-WebRequest -Uri $sumsUrl -OutFile $sums -UseBasicParsing -ProxyUseDefaultCredentials
+    Invoke-WebRequest -Uri $sumsUrl -OutFile $sums -UseBasicParsing
     $expectedHash = $null
     foreach ($line in (Get-Content $sums)) {
       if ($line -match '^([0-9a-fA-F]{64})\s+\*?slack-browser-install\.zip$') {
@@ -95,26 +95,32 @@ try {
       Where-Object { $_.Name -match 'slackdesktop|Slack' } | Select-Object -First 1
     $ver = $pkg.Version
     if ($ver) {
-      Say ("installed Slack: $ver (this package is built for 4.53.276)")
-      if ([string]$ver -notlike '4.53.276*') { Say 'note: version differs - the patcher rolls back automatically if Slack fails to start' }
+      Say ("installed Slack: $ver")
     }
   } catch {}
 
   $patch = Join-Path $mod 'apply-store-patch.ps1'
   Say 'requesting admin to patch Slack - accept the UAC prompt...'
+  $patchProcess = $null
   try {
-    Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$patch`" -HomeDir `"$mod`""
+    $patchProcess = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$patch`" -HomeDir `"$mod`""
   } catch {
-    Say 'elevation cancelled - files are in place, run apply-store-patch.ps1 manually when ready'
-    return
+    throw "Could not start the elevated patcher (UAC may have been cancelled). Payload files are staged; rerun apply-store-patch.ps1 manually when ready. Details: $($_.Exception.Message)"
   }
+  if (-not $patchProcess -or $patchProcess.ExitCode -ne 0) {
+    $code = if ($patchProcess) { $patchProcess.ExitCode } else { 'unknown' }
+    throw "Elevated patcher failed with exit code $code. Check $mod\patch-result.txt before retrying."
+  }
+
   $res = Join-Path $mod 'patch-result.txt'
-  if (Test-Path $res) { Get-Content $res | ForEach-Object { Say $_ } }
-  if ((Test-Path $res) -and ((Get-Content $res -Raw) -match ' \(classic\)')) {
-    Say 'note: Store Slack is ACL-locked, so the patched copy is CLASSIC Slack - open Slack from the Start Menu/desktop shortcut (not the Store tile); first run may ask to log in again.'
+  if (-not (Test-Path $res)) { throw "Patcher exited successfully but did not write its result file: $res" }
+  $patchResult = Get-Content $res -Raw
+  Get-Content $res | ForEach-Object { Say $_ }
+  if ($patchResult -match 'ROLLBACK' -or $patchResult -notmatch 'PATCH OK\b') {
+    throw "Slack patch was not confirmed successful. Review $res and the recovery steps before launching Slack."
   }
-  if ((Test-Path $res) -and ((Get-Content $res -Raw) -match 'ROLLBACK')) {
-    Say 'note: the patcher rolled back - Slack would not load the payload; check %USERPROFILE%\.slack-browser\patch-result.txt'
+  if ($patchResult -match ' \(classic\)') {
+    Say 'note: Store Slack is ACL-locked, so the patched copy is CLASSIC Slack - open Slack from the Start Menu/desktop shortcut (not the Store tile); first run may ask to log in again.'
   }
   Say 'done. Open Slack -> your own DM -> type the secret phrase -> set your PIN.'
 } catch {

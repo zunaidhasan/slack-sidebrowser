@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: dark; font-family:"Segoe UI",Arial,sans-serif; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px; background:#141a21; color:#dbe4ee; border:1px solid #2c3a47; }
+  h1 { margin:0 0 8px; font-size:20px; }
+  p { color:#9aa8b6; font-size:13px; line-height:1.5; }
+  label { display:block; margin-top:18px; font-size:12px; color:#9aa8b6; }
+  select { width:100%; margin-top:6px; padding:9px; color:#dbe4ee; background:#1e2630; border:1px solid #405064; border-radius:5px; }
+  .tip { margin:14px 0; padding:10px; background:#1e2630; border-radius:5px; font-size:12px; }
+  .row { display:flex; gap:8px; margin-top:18px; }
+  button { flex:1; height:34px; color:#dbe4ee; background:#243242; border:1px solid #405064; border-radius:5px; cursor:pointer; }
+  button.primary { color:#071318; background:#36c5f0; border-color:#36c5f0; }
+  #error { min-height:16px; color:#e06c6c; font-size:11px; }
+</style>
+</head>
+<body>
+  <h1>Welcome to Slack Sidebrowser</h1>
+  <p>Your browser is locked to your own Slack DM and protects its sessions with a PIN.</p>
+  <label for="profile">Choose your starting profile</label>
+  <select id="profile"></select>
+  <div class="tip">Tip: press <b>Ctrl+K</b> or <b>Ctrl+Shift+P</b> to search tabs, bookmarks, history, and actions.</div>
+  <div id="error" role="status"></div>
+  <div class="row">
+    <button id="skip">Skip</button>
+    <button id="start" class="primary">Start browsing</button>
+  </div>
+<script>
+  const profile = document.getElementById('profile');
+  const error = document.getElementById('error');
+  window.sb.onboardingState().then((state) => {
+    (state.profiles || []).forEach((item) => {
+      const option = document.createElement('option');
+      option.value = item.id;
+      option.textContent = item.name;
+      option.selected = item.id === state.active;
+      profile.appendChild(option);
+    });
+  }).catch((err) => { error.textContent = 'Could not load profiles: ' + String(err.message || err); });
+  document.getElementById('start').addEventListener('click', () => {
+    window.sb.onboardingFinish(profile.value).catch((err) => { error.textContent = String(err.message || err); });
+  });
+  document.getElementById('skip').addEventListener('click', () => window.sb.onboardingSkip());
+</script>
+</body>
+</html>

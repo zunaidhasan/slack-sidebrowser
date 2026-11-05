@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html,body{margin:0;height:100%;background:#1a1d21;color:#fff;font-family:'Segoe UI',sans-serif;overflow:hidden;-webkit-user-select:none}
+  .box{padding:16px 18px;display:flex;flex-direction:column;height:100%;box-sizing:border-box}
+  h3{margin:0 0 10px;font-size:14px;font-weight:600}
+  input{background:#2c3136;border:1px solid #4a5157;border-radius:6px;color:#fff;padding:9px 12px;font-size:15px;letter-spacing:4px;outline:none;text-align:center}
+  input:focus{border-color:#36c5f0}
+  #err{min-height:18px;font-size:12px;color:#f9a4a4;margin-top:8px}
+  button{margin-top:4px;background:#007a5a;border:none;color:#fff;border-radius:6px;padding:8px 0;font-size:13px;cursor:pointer}
+  button:hover{background:#0b8f6e}
+  .hint{font-size:11px;color:#9aa4ac;margin-top:auto}
+</style>
+</head>
+<body>
+<div class="box">
+  <h3 id="title">Unlock</h3>
+  <input id="pin" type="password" maxlength="16" autofocus>
+  <div id="err"></div>
+  <button id="go">Confirm</button>
+  <div class="hint" id="hint"></div>
+</div>
+<script>
+const mode = new URLSearchParams(location.search).get('mode') || 'verify';
+const title = document.getElementById('title');
+const hint = document.getElementById('hint');
+const pin = document.getElementById('pin');
+const err = document.getElementById('err');
+if (mode === 'set') { title.textContent = 'Set your PIN'; hint.textContent = 'First time: choose a PIN. It will be asked every time.'; }
+else { title.textContent = 'Enter PIN'; hint.textContent = 'Slack Browser unlocked only with your PIN.'; }
+let busy = false;
+async function submit() {
+  if (busy) return;
+  busy = true;
+  err.textContent = '';
+  try {
+    const r = await window.sb.submit(pin.value);
+    if (r && r.ok) return;                      // main closes the window
+    err.textContent = (r && r.msg) || 'Wrong PIN';
+    pin.value = ''; pin.focus();
+  } catch (e) { err.textContent = 'Error'; }
+  busy = false;
+}
+document.getElementById('go').addEventListener('click', submit);
+pin.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') submit(); });
+addEventListener('keydown', (ev) => { if (ev.key === 'Escape') window.close(); });
+pin.focus();
+</script>
+</body>
+</html>
